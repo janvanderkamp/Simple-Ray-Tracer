@@ -58,6 +58,12 @@ struct TGAColor {
 		for (int i = 0; i < 4; i++) res.bgra[i] = bgra[i] * intensity;
 		return res;
 	}
+
+	static void lerp(const TGAColor& lhs, const TGAColor& rhs, float lerpValue, TGAColor * resultOut) {
+
+		lerpValue = (lerpValue > 1.f ? 1.f : (lerpValue < 0.f ? 0.f : lerpValue));
+		for (int i = 0; i < 4; i++) (*resultOut)[i] = lhs.bgra[i] * lerpValue + (1 - lerpValue) * rhs.bgra[i];
+	}
 };
 
 class TGAImage {
