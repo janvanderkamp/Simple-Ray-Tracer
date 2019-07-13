@@ -3,6 +3,8 @@
 
 #include "raytracer.h"
 #include "tgaimage.h"
+#include <algorithm>
+#include <vector>
 
 using namespace std;
 
@@ -30,8 +32,8 @@ struct Point3
 
 struct Point2
 {
-	float x;
-	float y;
+	int x;
+	int y;
 };
 
 const Point2 ASPECT_RATIO = { 16.f, 16.f};
@@ -53,6 +55,11 @@ struct Ray
 {
 	Point3 origin;
 	Point3 direction;
+};
+
+struct Scene
+{
+	vector<Sphere> spheres;
 };
 
 float DistanceSquared(const Point3& lhs, const Point3& rhs)
@@ -110,7 +117,31 @@ const Point3 CanvasToViewport(unsigned int x, unsigned int y)
 	return viewport;
 }
 
+const Sphere * TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay)
+{
+	Point3 vpPos = CanvasToViewport(canvasPosition.x, canvasPosition.y);
+	shootRay.direction = vpPos - shootRay.origin;
 
+	float t = numeric_limits<float>::max();
+	const Sphere * firstSphere = nullptr;
+	pair<float, float> intersectResult;
+
+	
+	for (auto iter = scene.spheres.begin(); iter != scene.spheres.end(); ++iter)
+	{
+		if (RaySphereIntersection(shootRay, *iter, intersectResult))
+		{
+			float minT = min(intersectResult.first, intersectResult.second);
+			if (minT < t)
+			{
+				t = minT;
+				firstSphere = &(*iter);
+			}
+		}
+	}
+
+	return firstSphere;
+}
 
 
 int main(int argc, char** argv) {
@@ -124,9 +155,15 @@ int main(int argc, char** argv) {
 	Point3 viewportX = { 1.f, 0.f, 0.f };
 
 	// test sphere
-	Sphere redS = { viewportOrigin, 0.25f, red };
-	Ray testRay{ { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, zeroVec };
+ 	Ray testRay{ { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, zeroVec };
 	std::pair<float, float> intersectResult;
+
+	Scene scene;
+	scene.spheres = { 
+		{ { 0,  -1, 3 }, 1, red },
+		{ { 2,  0,  4 }, 1, green},
+		{ { -2, 0,  4 }, 1, blue  }
+	};
 
 	printf("thresholdSqrd: %f\n", thresholdSqrd);
 	TGAColor placeholder = white;
@@ -134,17 +171,9 @@ int main(int argc, char** argv) {
 	{
 		for (auto y = 0; y < CANVAS_HEIGHT; y++)
 		{
-			Point3 vpPos = CanvasToViewport(x, y);
-			testRay.direction = vpPos - testRay.origin;
-
-			if (RaySphereIntersection(testRay, redS, intersectResult))
-			{
-				image.set(x, y, redS.colour);
-			}
-			else
-			{
-				image.set(x, y, placeholder);
-			}
+			const Sphere* hitSphere = TraceRay(scene, { x, y }, testRay);
+			TGAColor fillColor = hitSphere ? hitSphere->colour : white ;
+			image.set(x, y, fillColor);
 		}
 	}
 
