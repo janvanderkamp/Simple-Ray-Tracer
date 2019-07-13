@@ -28,6 +28,10 @@ struct Point3
 	{
 		return { x - rhs.x, y - rhs.y, z - rhs.z };
 	}
+	Point3 operator * (const float rhs) const
+	{
+		return { x * rhs, y * rhs, z * rhs };
+	}
 };
 
 struct Point2
@@ -57,9 +61,23 @@ struct Ray
 	Point3 direction;
 };
 
+struct Light
+{
+	Point3 posOrDir;
+	float intensity;
+};
+
+struct IntersectionResult
+{
+	const Sphere * sphere;
+	std::pair<Point3, Point3> interectionPoints;
+};
+
 struct Scene
 {
 	vector<Sphere> spheres;
+	vector<Light> directionalLights;
+	float ambient = 0.f;
 };
 
 float DistanceSquared(const Point3& lhs, const Point3& rhs)
@@ -85,9 +103,8 @@ float Dot(const Point3& lhs, const Point3& rhs)
 
 bool RaySphereIntersection(const Ray& ray, const Sphere& sphere, std::pair<float, float>& resultOut)
 {
-	Point3 OC = (sphere.centre - ray.origin);
+	Point3 OC = (ray.origin - sphere.centre);
 	Point3 D = (ray.direction);
-
 
 	float k1 = Dot(D, D);
 	float k2 = 2.f * Dot(OC, D);
@@ -114,24 +131,25 @@ const Point3 CanvasToViewport(unsigned int x, unsigned int y)
 		y * ((float)VIEWPORT_HEIGHT / (float)CANVAS_HEIGHT),
 		VIEWPORT_DEPTH
 	};
+
 	return viewport;
 }
 
-const Sphere * TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay)
+bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, IntersectionResult& result)
 {
 	Point3 vpPos = CanvasToViewport(canvasPosition.x, canvasPosition.y);
-	shootRay.direction = vpPos - shootRay.origin;
+	shootRay.direction = Normalize(vpPos - shootRay.origin);
 
 	float t = numeric_limits<float>::max();
 	const Sphere * firstSphere = nullptr;
-	pair<float, float> intersectResult;
+	pair<float, float> solution;
 
 	
 	for (auto iter = scene.spheres.begin(); iter != scene.spheres.end(); ++iter)
 	{
-		if (RaySphereIntersection(shootRay, *iter, intersectResult))
+		if (RaySphereIntersection(shootRay, *iter, solution))
 		{
-			float minT = min(intersectResult.first, intersectResult.second);
+			float minT = min(solution.first, solution.second);
 			if (minT < t)
 			{
 				t = minT;
@@ -140,9 +158,27 @@ const Sphere * TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& s
 		}
 	}
 
-	return firstSphere;
+	result.sphere = firstSphere;
+	result.interectionPoints =
+		make_pair(shootRay.origin + shootRay.direction * solution.first,
+				  shootRay.origin + shootRay.direction * solution.second);
+
+	return firstSphere != nullptr;
 }
 
+float ComputeLight(const Scene& scene, const IntersectionResult& result)
+{
+	float startingLight = scene.ambient;
+	Point3 sphereNormal = Normalize(result.interectionPoints.first - result.sphere->centre);
+	for (auto iter = scene.directionalLights.begin(); 
+		iter != scene.directionalLights.end(); ++iter)
+	{
+		float intensity = Dot((*iter).posOrDir, sphereNormal);
+		startingLight += max(0.f, intensity);
+	}
+
+	return startingLight;
+}
 
 int main(int argc, char** argv) {
 
@@ -160,20 +196,31 @@ int main(int argc, char** argv) {
 
 	Scene scene;
 	scene.spheres = { 
-		{ { 0,  -1, 3 }, 1, red },
-		{ { 2,  0,  4 }, 1, green},
-		{ { -2, 0,  4 }, 1, blue  }
+		{ { 1,  0, 3 }, 1, red },
+		{ { 3,  1,  4 }, 1, green},
+		{ { -1, 1,  4 }, 1, blue }
 	};
+	scene.directionalLights = {
+		{ Normalize({ 1.f, 1.f, -1.f }), .75f }
+	};
+	scene.ambient = 0.25f;
 
-	printf("thresholdSqrd: %f\n", thresholdSqrd);
 	TGAColor placeholder = white;
+	IntersectionResult result;
+	Point2 halfCanvas = { CANVAS_WIDTH / 2.f, CANVAS_HEIGHT / 2.f };
 	for (auto x = 0; x < CANVAS_WIDTH; x++)
 	{
 		for (auto y = 0; y < CANVAS_HEIGHT; y++)
 		{
-			const Sphere* hitSphere = TraceRay(scene, { x, y }, testRay);
-			TGAColor fillColor = hitSphere ? hitSphere->colour : white ;
-			image.set(x, y, fillColor);
+			if ((TraceRay(scene, { x, y }, testRay, result)))
+			{
+				float intensity = ComputeLight(scene, result);				
+				image.set(x, y, result.sphere->colour * 1.f);
+			}
+			else
+			{
+				image.set(x, y, white);
+			}
 		}
 	}
 
