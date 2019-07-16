@@ -1,4 +1,5 @@
 #include "SDL.h"
+#include "src/tgaimage.h"
 
 SDL_Window *window;
 SDL_Renderer *renderer;
@@ -30,7 +31,8 @@ DrawChessBoard(SDL_Renderer * renderer)
 }
 
 void
-loop()
+//loop(const TGAImage& image)
+loop(uint32_t * buffer, SDL_Texture* framebuffer, int width)
 {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -45,11 +47,31 @@ loop()
         }
     }
 
-    DrawChessBoard(renderer);
+    //DrawChessBoard(renderer);
+
+	// Rendering code goes here
+	SDL_UpdateTexture(framebuffer, NULL, buffer, width * sizeof(uint32_t));
+
+	SDL_RenderClear(renderer);
+	SDL_RenderCopy(renderer, framebuffer, NULL, NULL);
+	SDL_RenderPresent(renderer);
+
 
     /* Got everything on rendering surface,
        now Update the drawing image on window screen */
     SDL_UpdateWindowSurface(window);
+}
+
+uint32_t ToUint(const TGAColor& c)
+{
+	// RGBA format
+	return (uint32_t)(((c.bgra[3] << 24) | (c.bgra[2] << 16) | (c.bgra[1] << 8) | c.bgra[0]) & 0xffffffffL);
+}
+
+bool SetColor(int x, int y, int width, int bytespp, uint32_t * buffer, const TGAColor& c) {
+
+	memcpy(buffer + (x + y * width) * bytespp, c.bgra, bytespp);
+	return true;
 }
 
 int
@@ -67,6 +89,20 @@ main(int argc, char *argv[])
     }
 
     /* Create window and renderer for given surface */
+	int width = 640, height = 480;
+	uint32_t * buffer = new uint32_t[width * height];
+	unsigned long nbytes = width * height * 4;
+	memset(buffer, 122, nbytes);
+
+	//TGAImage image(width, height, TGAImage::RGBA);
+	//for (auto x = 0; x < width; x++)
+	//{
+	//	for (auto y = 0; y < height; y++)
+	//	{
+	//		image.set(x, y, Colors::yellow);
+	//	}
+	//}
+
     window = SDL_CreateWindow("Chess Board", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, 0);
     if (!window) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window creation fail : %s\n",SDL_GetError());
@@ -86,9 +122,14 @@ main(int argc, char *argv[])
     /* Draw the Image on rendering surface */
     done = 0;
 
+	SDL_Texture* framebuffer = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGRA8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+
+
     while (!done) {
-        loop();
+        loop(buffer, framebuffer, width);
     }
+
+	delete[] buffer;
 
     SDL_Quit();
     return 0;

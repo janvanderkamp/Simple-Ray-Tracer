@@ -66,6 +66,20 @@ struct TGAColor {
 	}
 };
 
+namespace Colors
+{
+	const TGAColor black = TGAColor(0, 0, 0, 255);
+	const TGAColor blue = TGAColor(0, 0, 0, 255);
+	const TGAColor clear = TGAColor(0, 0, 0, 0);
+	const TGAColor cyan = TGAColor(0, 255, 255, 255);
+	const TGAColor gray = TGAColor(122, 122, 122, 255);
+	const TGAColor green = TGAColor(0, 255, 0, 255);
+	const TGAColor magenta = TGAColor(255, 0, 255, 255);
+	const TGAColor red = TGAColor(255, 0, 0, 255);
+	const TGAColor white = TGAColor(255, 255, 255, 255);
+	const TGAColor yellow = TGAColor(255, 235, 4, 255);
+}
+
 class TGAImage {
 protected:
 	unsigned char* data;
