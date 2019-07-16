@@ -180,7 +180,8 @@ float ComputeLight(const Scene& scene, const IntersectionResult& result)
 	return startingLight;
 }
 
-int main(int argc, char** argv) {
+// for SDL: see https://gamedev.stackexchange.com/a/157608
+/*int main(int argc, char** argv) {
 
 	TGAImage image(CANVAS_WIDTH, CANVAS_HEIGHT, TGAImage::RGB);
 
@@ -228,3 +229,4 @@ int main(int argc, char** argv) {
 	image.write_tga_file("../results/output.tga");
 	return 0;
 }
+//*/
