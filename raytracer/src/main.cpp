@@ -11,27 +11,6 @@
 using namespace std;
 
 
-// viewport parameters
-struct Point3
-{
-	float x;
-	float y;
-	float z;
-
-	Point3 operator + (const Point3& rhs) const
-	{
-		return { x + rhs.x, y + rhs.y, z + rhs.z };
-	}
-	Point3 operator - (const Point3& rhs) const
-	{
-		return { x - rhs.x, y - rhs.y, z - rhs.z };
-	}
-	Point3 operator * (const float rhs) const
-	{
-		return { x * rhs, y * rhs, z * rhs };
-	}
-};
-
 struct Point2
 {
 	int x;
@@ -49,27 +28,27 @@ const unsigned int VIEWPORT_DEPTH = 1;
 
 struct Sphere
 {
-	Point3 centre;
+	Vector3 centre;
 	float radius;
 	TGAColor colour;
 };
 
 struct Ray
 {
-	Point3 origin;
-	Point3 direction;
+	Vector3 origin;
+	Vector3 direction;
 };
 
 struct Light
 {
-	Point3 posOrDir;
+	Vector3 posOrDir;
 	float intensity;
 };
 
 struct IntersectionResult
 {
 	const Sphere * sphere;
-	std::pair<Point3, Point3> interectionPoints;
+	std::pair<Vector3, Vector3> interectionPoints;
 };
 
 struct Scene
@@ -79,35 +58,24 @@ struct Scene
 	float ambient = 0.f;
 };
 
-float DistanceSquared(const Point3& lhs, const Point3& rhs)
+float DistanceSquared(const Vector3& lhs, const Vector3& rhs)
 {
 	return powf(lhs.x - rhs.x, 2.f) + powf(lhs.y - rhs.y, 2.f) + powf(lhs.z - rhs.z, 2.f);
 }
 
-float Magnitude(const Point3& vec)
+float Magnitude(const Vector3& vec)
 {
 	return sqrtf(powf(vec.x, 2.f) + powf(vec.y, 2.f) + powf(vec.z, 2.f));
 }
 
-Point3 Normalize(const Point3& vec)
-{
-	float magnitude = Magnitude(vec);
-	return { vec.x / magnitude, vec.y / magnitude, vec.z / magnitude };
-}
-
-float Dot(const Point3& lhs, const Point3& rhs)
-{
-	return (lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z);
-}
-
 bool RaySphereIntersection(const Ray& ray, const Sphere& sphere, std::pair<float, float>& resultOut)
 {
-	Point3 OC = (ray.origin - sphere.centre);
-	Point3 D = (ray.direction);
+	Vector3 OC = (ray.origin - sphere.centre);
+	Vector3 D = (ray.direction);
 
-	float k1 = Dot(D, D);
-	float k2 = 2.f * Dot(OC, D);
-	float k3 = Dot(OC, OC) - powf(sphere.radius, 2.f);
+	float k1 = D * D;
+	float k2 = 2.f * (OC * D);
+	float k3 = (OC * OC) - powf(sphere.radius, 2.f);
 
 	float discriminant = (powf(k2, 2.f) - (4 * k1 * k3));
 	if (discriminant < 0)
@@ -123,21 +91,19 @@ bool RaySphereIntersection(const Ray& ray, const Sphere& sphere, std::pair<float
 	return true;
 }
 
-const Point3 CanvasToViewport(unsigned int x, unsigned int y)
+const Vector3 CanvasToViewport(unsigned int x, unsigned int y)
 {
-	Point3 viewport = { 
-		x * ((float)VIEWPORT_WIDTH / (float)CANVAS_WIDTH),
+	Vector3 viewport(x * ((float)VIEWPORT_WIDTH / (float)CANVAS_WIDTH),
 		y * ((float)VIEWPORT_HEIGHT / (float)CANVAS_HEIGHT),
-		VIEWPORT_DEPTH
-	};
-
+		VIEWPORT_DEPTH);
+	
 	return viewport;
 }
 
 bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, IntersectionResult& result)
 {
-	Point3 vpPos = CanvasToViewport(canvasPosition.x, canvasPosition.y);
-	shootRay.direction = Normalize(vpPos - shootRay.origin);
+	Vector3 vpPos = CanvasToViewport(canvasPosition.x, canvasPosition.y);
+	shootRay.direction = (vpPos - shootRay.origin).normalized();
 
 	float t = numeric_limits<float>::max();
 	const Sphere * firstSphere = nullptr;
@@ -170,11 +136,12 @@ bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, I
 float ComputeLight(const Scene& scene, const IntersectionResult& result)
 {
 	float startingLight = scene.ambient;
-	Point3 sphereNormal = Normalize(result.interectionPoints.first - result.sphere->centre);
+	Vector3 sphereNormal = (result.interectionPoints.first - result.sphere->centre).normalized();
+
 	for (auto iter = scene.directionalLights.begin(); 
 		iter != scene.directionalLights.end(); ++iter)
 	{
-		float intensity = Dot((*iter).posOrDir, sphereNormal);
+		float intensity = (*iter).posOrDir * sphereNormal;
 		startingLight += max(0.f, intensity);
 	}
 
@@ -184,9 +151,9 @@ float ComputeLight(const Scene& scene, const IntersectionResult& result)
 void RenderScene(const Scene& scene, TGAImage& image)
 {
 	// Useful variables
-	Point3 zeroVec = { 0.f, 0.f, 0.f };
-	Point3 viewportOrigin = { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, VIEWPORT_DEPTH };
-	Point3 viewportX = { 1.f, 0.f, 0.f };
+	Vector3 zeroVec = { 0.f, 0.f, 0.f };
+	Vector3 viewportOrigin( VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, VIEWPORT_DEPTH );
+	Vector3 viewportX = { 1.f, 0.f, 0.f };
 
 	Vector3 zero(VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, VIEWPORT_DEPTH);
 	Vector3 one(1.f);
@@ -220,18 +187,22 @@ void RenderScene(const Scene& scene, TGAImage& image)
 SDL_Window *window;
 SDL_Renderer *renderer;
 int done;
-unsigned __int64 lastTime;
+float lastTime;
 
 // Extras
-const Light SUN = { Normalize({ 1.f, 1.f, -1.f }), 3.75f };
+const Light SUN = { Vector3(1.f, 1.f, -1.f).normalized(), 3.75f };
 
 
 void
-loop(const Scene& scene, TGAImage * image, SDL_Texture* framebuffer)
+loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* framebuffer)
 {
-	float nowSeconds = Utils().secondsSinceRun();
+	float nowSeconds = utils.secondsSinceRun();
 
-	// cout << "FPS: " << 1000.f / (float)millis << endl;
+	cout << "FPS: " << 1.f / (nowSeconds - lastTime) << endl;
+	lastTime = nowSeconds;
+
+	RenderScene(scene, *image);
+
 
 	// debugging
 	IntersectionResult result;
@@ -328,10 +299,10 @@ int main(int argc, char *argv[]) {
 	SDL_Texture* framebuffer = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, CANVAS_WIDTH, CANVAS_HEIGHT);
 	while (!done) {
 
-		float angle = -utils.secondsSinceRun() * .003f;
+		float angle = -utils.secondsSinceRun() * 0.5f;
 		//float angle = 0.f;
 		//printf("time: %ld\n", utils.epochSeconds());
-		printf("time: %f\n", utils.secondsSinceRun());
+		//printf("time: %f\n", utils.secondsSinceRun());
 
 		// rotate sun
 		scene.directionalLights[0].posOrDir.x = cosf(angle) * SUN.posOrDir.x - sinf(angle) * SUN.posOrDir.z;
@@ -339,7 +310,7 @@ int main(int argc, char *argv[]) {
 
 		//printf("SUN: (%f, %f, %f)\n", scene.directionalLights[0]);
 
-		loop(scene, &image, framebuffer);
+		loop(scene, utils, &image, framebuffer);
 	}
 
 	return 0;

@@ -15,12 +15,12 @@ public:
 		_startTime = std::chrono::high_resolution_clock::now();
 	}
 
-	float secondsSinceRun()
+	float secondsSinceRun() const 
 	{
 		return static_cast<double>(millisecondsSinceRun()) / 1000.0;
 	}
 
-	uint64_t millisecondsSinceRun()
+	uint64_t millisecondsSinceRun() const
 	{
 		return duration_cast<milliseconds>(high_resolution_clock::now() - _startTime).count();
 	}

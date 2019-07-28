@@ -49,6 +49,12 @@ public:
 		}
 	}
 
+	Vector3 & normalized()
+	{
+		normalize();
+		return *this;
+	}
+
 	float operator *(const Vector3& v) const
 	{
 		return x * v.x + y * v.y + z * v.z;
