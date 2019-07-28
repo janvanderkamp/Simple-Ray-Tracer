@@ -1,10 +1,12 @@
 ﻿// raytracer.cpp : Defines the entry point for the application.
 //
-
-#include "raytracer.h"
-#include "tgaimage.h"
 #include <algorithm>
 #include <vector>
+#include "SDL.h"
+#include "raytracer.h"
+#include "tgaimage.h"
+#include "vector3.h"
+#include "utils.h"
 
 using namespace std;
 
@@ -42,6 +44,7 @@ const unsigned int CANVAS_HEIGHT = (CANVAS_WIDTH / ASPECT_RATIO.x) * ASPECT_RATI
 const unsigned int VIEWPORT_WIDTH = 1;
 const unsigned int VIEWPORT_HEIGHT = 1;
 const unsigned int VIEWPORT_DEPTH = 1;
+//Utils utils;
 
 
 struct Sphere
@@ -148,8 +151,10 @@ bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, I
 			float minT = min(solution.first, solution.second);
 			if (minT < t)
 			{
+				// just break here, these spheres aren't transparent
 				t = minT;
 				firstSphere = &(*iter);
+				break;
 			}
 		}
 	}
@@ -176,33 +181,22 @@ float ComputeLight(const Scene& scene, const IntersectionResult& result)
 	return startingLight;
 }
 
-// for SDL: see https://gamedev.stackexchange.com/a/157608
-/*int main(int argc, char** argv) {
-
-	TGAImage image(CANVAS_WIDTH, CANVAS_HEIGHT, TGAImage::RGB);
-
-	float thresholdSqrd = powf(VIEWPORT_HEIGHT / 4.f, 2.f);
-
+void RenderScene(const Scene& scene, TGAImage& image)
+{
+	// Useful variables
 	Point3 zeroVec = { 0.f, 0.f, 0.f };
 	Point3 viewportOrigin = { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, VIEWPORT_DEPTH };
 	Point3 viewportX = { 1.f, 0.f, 0.f };
 
-	// test sphere
- 	Ray testRay{ { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, zeroVec };
+	Vector3 zero(VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, VIEWPORT_DEPTH);
+	Vector3 one(1.f);
+	Vector3 defaultA;
+	defaultA.zero();
+	one = zero = Vector3(1, 2, 3);
+
+	Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, zeroVec };
 	std::pair<float, float> intersectResult;
 
-	Scene scene;
-	scene.spheres = { 
-		{ { 1,  0, 3 }, 1, red },
-		{ { 3,  1,  4 }, 1, green},
-		{ { -1, 1,  4 }, 1, blue }
-	};
-	scene.directionalLights = {
-		{ Normalize({ 1.f, 1.f, -1.f }), 3.75f }
-	};
-	scene.ambient = 0.05f;
-
-	TGAColor placeholder = white;
 	IntersectionResult result;
 	Point2 halfCanvas = { CANVAS_WIDTH / 2.f, CANVAS_HEIGHT / 2.f };
 	for (auto x = 0; x < CANVAS_WIDTH; x++)
@@ -211,18 +205,143 @@ float ComputeLight(const Scene& scene, const IntersectionResult& result)
 		{
 			if ((TraceRay(scene, { x, y }, testRay, result)))
 			{
-				float intensity = ComputeLight(scene, result);				
+				float intensity = ComputeLight(scene, result);
 				image.set(x, y, result.sphere->colour * intensity);
 			}
 			else
 			{
-				image.set(x, y, white);
+				image.set(x, y, Colors::white);
 			}
 		}
 	}
+}
 
-	image.flip_vertically(); // have the origin at the left bottom corner of the image
-	image.write_tga_file("../results/output.tga");
+// SDL
+SDL_Window *window;
+SDL_Renderer *renderer;
+int done;
+unsigned __int64 lastTime;
+
+// Extras
+const Light SUN = { Normalize({ 1.f, 1.f, -1.f }), 3.75f };
+
+
+void
+loop(const Scene& scene, TGAImage * image, SDL_Texture* framebuffer)
+{
+	float nowSeconds = Utils().secondsSinceRun();
+
+	// cout << "FPS: " << 1000.f / (float)millis << endl;
+
+	// debugging
+	IntersectionResult result;
+	Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, {0.f, 0.f, 0.f} };
+
+	// poll events
+	SDL_Event e;
+	while (SDL_PollEvent(&e)) {
+		if (e.type == SDL_QUIT) {
+			done = 1;
+			return;
+		}
+
+		if (e.type == SDL_MOUSEBUTTONUP)
+		{
+			//Get mouse position
+			int x, y;
+			SDL_GetMouseState(&x, &y);
+
+			if ((TraceRay(scene, { x, y }, testRay, result)))
+			{
+				float intensity = ComputeLight(scene, result);
+				TGAColor col = result.sphere->colour * intensity;
+				printf("intensity: %f, colour: (%d, %d, %d, %d)\n", intensity, col.bgra[0], col.bgra[1], col.bgra[2], col.bgra[3]);
+			}
+		}
+
+		if ((e.type == SDL_KEYDOWN) && (e.key.keysym.sym == SDLK_ESCAPE)) {
+			done = 1;
+			return;
+		}
+	}
+
+	// Rendering code goes here
+	SDL_UpdateTexture(framebuffer, NULL, image->buffer(), image->get_width() * image->get_bytespp());
+
+	SDL_RenderClear(renderer);
+	SDL_RenderCopy(renderer, framebuffer, NULL, NULL);
+	SDL_RenderPresent(renderer);
+
+
+	/* Got everything on rendering surface,
+	   now Update the drawing image on window screen */
+	SDL_UpdateWindowSurface(window);
+}
+
+//*
+int main(int argc, char *argv[]) {
+
+	TGAImage image(CANVAS_WIDTH, CANVAS_HEIGHT, TGAImage::RGBA);
+	float thresholdSqrd = powf(VIEWPORT_HEIGHT / 4.f, 2.f);
+
+	Scene scene;
+	scene.spheres = { 
+		{ { 1,  0, 3 }, 1, Colors::red },
+		{ { 3,  1,  4 }, 1, Colors::green},
+		{ { -1, 1,  4 }, 1, Colors::blue }
+	};
+	scene.directionalLights = {
+		SUN
+	};
+	scene.ambient = 0.25f;
+
+	RenderScene(scene, image);
+
+	// Write to disk also
+	//image.flip_vertically(); // have the origin at the left bottom corner of the image
+	//image.write_tga_file("../results/output.tga");
+
+    SDL_Surface *surface;
+
+    /* Enable standard application logging */
+    SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
+
+    /* Initialize SDL */
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_Init fail : %s\n", SDL_GetError());
+        return 1;
+    }
+
+    window = SDL_CreateWindow("Ray Tracer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, CANVAS_WIDTH, CANVAS_HEIGHT, 0);
+    if (!window) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Window creation fail : %s\n",SDL_GetError());
+        return 1;
+    }
+    surface = SDL_GetWindowSurface(window);
+    renderer = SDL_CreateSoftwareRenderer(surface);
+    if (!renderer) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Render creation for surface fail : %s\n",SDL_GetError());
+        return 1;
+    }
+
+	Utils utils;
+	SDL_Texture* framebuffer = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, CANVAS_WIDTH, CANVAS_HEIGHT);
+	while (!done) {
+
+		float angle = -utils.secondsSinceRun() * .003f;
+		//float angle = 0.f;
+		//printf("time: %ld\n", utils.epochSeconds());
+		printf("time: %f\n", utils.secondsSinceRun());
+
+		// rotate sun
+		scene.directionalLights[0].posOrDir.x = cosf(angle) * SUN.posOrDir.x - sinf(angle) * SUN.posOrDir.z;
+		scene.directionalLights[0].posOrDir.z = sinf(angle) * SUN.posOrDir.x + cosf(angle) * SUN.posOrDir.z;
+
+		//printf("SUN: (%f, %f, %f)\n", scene.directionalLights[0]);
+
+		loop(scene, &image, framebuffer);
+	}
+
 	return 0;
 }
 //*/
