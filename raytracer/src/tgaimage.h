@@ -69,7 +69,7 @@ struct TGAColor {
 namespace Colors
 {
 	const TGAColor black = TGAColor(0, 0, 0, 255);
-	const TGAColor blue = TGAColor(0, 0, 0, 255);
+	const TGAColor blue = TGAColor(0, 0, 255, 255);
 	const TGAColor clear = TGAColor(0, 0, 0, 0);
 	const TGAColor cyan = TGAColor(0, 255, 255, 255);
 	const TGAColor gray = TGAColor(122, 122, 122, 255);

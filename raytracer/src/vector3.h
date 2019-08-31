@@ -3,7 +3,7 @@
 
 /////////////////////////////////////////////////////////////////
 //
-// class Vecto3 - a simple 3D vector class
+// class Vector3 - a simple 3D vector class
 //
 /////////////////////////////////////////////////////////////////
 
@@ -55,7 +55,7 @@ public:
 		return *this;
 	}
 
-	float operator *(const Vector3& v) const
+	float dot(const Vector3& v) const
 	{
 		return x * v.x + y * v.y + z * v.z;
 	}
@@ -78,7 +78,7 @@ public:
 
 	Vector3 operator -(const Vector3& v) const
 	{
-		return Vector3(v.x - x, v.y - y, v.z - z);
+		return Vector3(x - v.x, y - v.y, z - v.z);
 	}
 
 	Vector3 operator *(float s) const
