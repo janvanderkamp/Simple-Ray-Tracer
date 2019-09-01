@@ -290,6 +290,8 @@ loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* fram
 			//Get mouse position
 			int x, y;
 			SDL_GetMouseState(&x, &y);
+			x = 168;
+			y = 359;
 
 			if ((TraceRay(scene, { x, y }, testRay, result)))
 			{
