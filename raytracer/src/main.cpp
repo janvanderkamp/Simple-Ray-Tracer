@@ -18,7 +18,7 @@ struct Point2
 };
 
 const Point2 ASPECT_RATIO = { 16.f, 16.f};
-const unsigned int CANVAS_WIDTH = 960;
+const unsigned int CANVAS_WIDTH = 540;
 const unsigned int CANVAS_HEIGHT = (CANVAS_WIDTH / ASPECT_RATIO.x) * ASPECT_RATIO.y;
 const unsigned int VIEWPORT_WIDTH = 1;
 const unsigned int VIEWPORT_HEIGHT = 1;
@@ -299,7 +299,7 @@ int main(int argc, char *argv[]) {
 	SDL_Texture* framebuffer = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, CANVAS_WIDTH, CANVAS_HEIGHT);
 	while (!done) {
 
-		float angle = -utils.secondsSinceRun() * 0.5f;
+		float angle = -3.14f;
 		//float angle = 0.f;
 		//printf("time: %ld\n", utils.epochSeconds());
 		//printf("time: %f\n", utils.secondsSinceRun());
