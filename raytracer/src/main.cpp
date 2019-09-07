@@ -28,6 +28,14 @@ enum Features
 	Shadows,
 	Reflection
 };
+Features& operator++(Features& f)
+{
+	return f = (f == Features::Reflection) ? Features::Color : static_cast<Features>(static_cast<int>(f) + 1);
+}
+Features& operator--(Features& f)
+{
+	return f = (f == Features::Color) ? Features::Reflection : static_cast<Features>(static_cast<int>(f) - 1);
+}
 
 struct Point2
 {
@@ -43,7 +51,7 @@ const int VIEWPORT_HEIGHT = 1;
 const int VIEWPORT_DEPTH = 1;
 const float EPSILON = .0001f;
 
-const Features ENABLED_FEATURES = Shadows;
+Features ENABLED_FEATURES = Color;
 //Utils utils;
 
 struct Sphere
@@ -355,10 +363,22 @@ loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* fram
 				printf("intensity: %f, colour: (%d, %d, %d, %d)\n", intensity, col.bgra[0], col.bgra[1], col.bgra[2], col.bgra[3]);
 			}
 		}
-
-		if ((e.type == SDL_KEYDOWN) && (e.key.keysym.sym == SDLK_ESCAPE)) {
-			done = 1;
-			return;
+		else if (e.type == SDL_KEYUP)
+		{
+			switch (e.key.keysym.sym)
+			{
+			case SDLK_UP:
+				++ENABLED_FEATURES;
+				break;
+			case SDLK_DOWN:
+				--ENABLED_FEATURES;
+				break;
+			case SDLK_ESCAPE:
+				done = 1;
+				return;
+			default:
+				break;
+			}
 		}
 	}
 
@@ -454,7 +474,7 @@ int main(int argc, char *argv[]) {
 			scene.lights[0].directionN.z = sinf(angle) * SUN.directionN.x + cosf(angle) * SUN.directionN.z;
 			scene.lights[0].directionN.normalize();
 
-			printf("SUN: (%f, %f, %f)\n", scene.lights[0]);
+			//printf("SUN: (%f, %f, %f)\n", scene.lights[0]);
 		}
 
 		loop(scene, utils, &image, framebuffer, render);
