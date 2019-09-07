@@ -11,6 +11,24 @@
 using namespace std;
 
 
+enum LightType
+{
+	PointLight,
+	DirectionLight,
+	SpotLight,
+	AmbientLight
+};
+
+enum Features
+{
+	Color,
+	Ambient,
+	Diffuse,
+	Specular,
+	Shadows,
+	Reflection
+};
+
 struct Point2
 {
 	int x;
@@ -18,20 +36,15 @@ struct Point2
 };
 
 const Point2 ASPECT_RATIO = { 16.f, 16.f};
-const unsigned int CANVAS_WIDTH = 540;
-const unsigned int CANVAS_HEIGHT = (CANVAS_WIDTH / ASPECT_RATIO.x) * ASPECT_RATIO.y;
-const unsigned int VIEWPORT_WIDTH = 1;
-const unsigned int VIEWPORT_HEIGHT = 1;
-const unsigned int VIEWPORT_DEPTH = 1;
-//Utils utils;
+const int CANVAS_WIDTH = 600;
+const int CANVAS_HEIGHT = (CANVAS_WIDTH / ASPECT_RATIO.x) * ASPECT_RATIO.y;
+const int VIEWPORT_WIDTH = 1;
+const int VIEWPORT_HEIGHT = 1;
+const int VIEWPORT_DEPTH = 1;
+const float EPSILON = .0001f;
 
-enum LightType
-{
-	PointLight,
-	DirectionLight,
-	SpotLight,
-	Ambient
-};
+const Features ENABLED_FEATURES = Shadows;
+//Utils utils;
 
 struct Sphere
 {
@@ -50,22 +63,36 @@ struct Ray
 struct Light
 {
 	Light() :
-		posOrDir(Vector3()),
+		position(),
+		directionN(),
 		intensity(0.f),
 		color(Colors::white),
 		spotlightAngle(0.f),
 		range(0.f),
-		type(LightType::Ambient) {
+		type(LightType::AmbientLight) {
 	};
-	Light(const Vector3& posOrDir,	float intensity=1.f, const TGAColor& color=Colors::white, float spotlightAngle=360.f, float range=1.f, LightType type=LightType::DirectionLight) :
-		posOrDir(posOrDir),
+	Light(const Vector3& posOrDir,	LightType type=LightType::DirectionLight, float intensity=1.f, const TGAColor& color=Colors::white, float spotlightAngle=360.f, float range=1.f) :
+		position(),
+		directionN(),
 		intensity(intensity),
 		color(color),
 		spotlightAngle(spotlightAngle),
 		range(range),
-		type(type) {
+		type(type) 
+	{
+		if (type == LightType::DirectionLight)
+		{
+			directionN = posOrDir;
+			directionN.normalize();
+		}
+		else if (type == LightType::PointLight)
+		{
+			position = posOrDir;
+		}
 	};
-	Vector3 posOrDir;
+
+	Vector3 position;
+	Vector3 directionN;
 	float intensity;
 	TGAColor color;
 	float spotlightAngle;
@@ -76,14 +103,13 @@ struct Light
 struct IntersectionResult
 {
 	const Sphere * sphere;
-	std::pair<Vector3, Vector3> interectionPoints;
+	Vector3 interectionPoint;
 };
 
 struct Scene
 {
 	vector<Sphere> spheres;
 	vector<Light> lights;
-	float ambient = 0.f;
 };
 
 float DistanceSquared(const Vector3& lhs, const Vector3& rhs)
@@ -119,13 +145,44 @@ bool RaySphereIntersection(const Ray& ray, const Sphere& sphere, std::pair<float
 	return true;
 }
 
-const Vector3 CanvasToViewport(unsigned int x, unsigned int y)
+const Vector3 CanvasToViewport(int x, int y)
 {
 	Vector3 viewport(x * ((float)VIEWPORT_WIDTH / (float)CANVAS_WIDTH),
-		y * ((float)VIEWPORT_HEIGHT / (float)CANVAS_HEIGHT),
-		VIEWPORT_DEPTH);
+					 y * ((float)VIEWPORT_HEIGHT / (float)CANVAS_HEIGHT),
+					 VIEWPORT_DEPTH);
 	
-	return viewport;
+	return viewport ;
+}
+
+bool DoesIntersectSphere(const Scene& scene, Ray& shootRay, IntersectionResult& result, float minT = 0.f, float maxT = numeric_limits<float>::max(), bool checkAll=true)
+{
+	const Sphere * firstSphere = nullptr;
+	pair<float, float> solution;
+	float t = maxT;
+
+	for (auto iter = scene.spheres.begin(); iter != scene.spheres.end(); ++iter)
+	{
+		if (RaySphereIntersection(shootRay, *iter, solution))
+		{
+			float first = min(solution.first, solution.second);
+			if (first >= minT && first < t)
+			{
+				// just break here, these spheres aren't transparent
+				t = first;
+				firstSphere = &(*iter);
+
+				if (!checkAll)
+				{
+					break;
+				}
+			}
+		}
+	}
+
+	result.sphere = firstSphere;
+	result.interectionPoint = shootRay.origin + shootRay.direction * t;
+
+	return firstSphere != nullptr;
 }
 
 bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, IntersectionResult& result)
@@ -133,37 +190,12 @@ bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, I
 	Vector3 vpPos = CanvasToViewport(canvasPosition.x, canvasPosition.y);
 	shootRay.direction = (vpPos - shootRay.origin).normalized();
 
-	float t = numeric_limits<float>::max();
-	const Sphere * firstSphere = nullptr;
-	pair<float, float> solution;
-
-	
-	for (auto iter = scene.spheres.begin(); iter != scene.spheres.end(); ++iter)
-	{
-		if (RaySphereIntersection(shootRay, *iter, solution))
-		{
-			float minT = min(solution.first, solution.second);
-			if (minT < t)
-			{
-				// just break here, these spheres aren't transparent
-				t = minT;
-				firstSphere = &(*iter);
-				break;
-			}
-		}
-	}
-
-	result.sphere = firstSphere;
-	result.interectionPoints =
-		make_pair(shootRay.origin + shootRay.direction * solution.first,
-				  shootRay.origin + shootRay.direction * solution.second);
-
-	return firstSphere != nullptr;
+	return DoesIntersectSphere(scene, shootRay, result, 1.f);
 }
 
 float GetDiffuse(const Vector3& normalN, const Vector3& lightN )
 {
-	float NDotL = max(lightN.dot(normalN), 0.f);
+	float NDotL = max(normalN.dot(lightN), 0.f);
 	return NDotL;
 }
 
@@ -175,70 +207,95 @@ float GetSpecular(const Vector3& normalN, const Vector3& lightN, const Vector3& 
 	return powf(RDotV, specularPower);
 }
 
-float GetLighting(const Vector3& normalN, const Vector3& viewVecN, const Vector3& lightDirN, float specularExp)
+float GetLighting(const Vector3& normalN, const Vector3& viewVecN, const Vector3& lightDirN, float intensity, float specularExp)
 {
-	float diffuse = GetDiffuse(normalN, lightDirN);
+	float amount = ENABLED_FEATURES >= Diffuse ? 
+				   GetDiffuse(normalN, lightDirN) : 
+				   0.f ;
 
-	Vector3 reflectingVecN = ((normalN * 2.f) * (normalN.dot(lightDirN)) - lightDirN).normalized();
-	float specularIntensity = GetSpecular(normalN, lightDirN, viewVecN, specularExp);
+	if (ENABLED_FEATURES >= Specular)
+	{
+		Vector3 reflectingVecN = ((normalN * 2.f) * (normalN.dot(lightDirN)) - lightDirN).normalized();
+		float specularIntensity = GetSpecular(normalN, lightDirN, viewVecN, specularExp);
+		amount += specularIntensity;
+	}
 
-	return (diffuse + specularIntensity);
+	return amount * intensity;
 }
 
 float LightingForRaycast(const Scene& scene, const IntersectionResult& result, const Vector3& viewVecN)
 {
-	float startingLight = scene.ambient;
-	Vector3 sphereNormal = (result.interectionPoints.first - result.sphere->centre).normalized();
+	float sceneLight = 0.f;
+	const Vector3& intersection = result.interectionPoint;
+	Vector3 sphereNormal = (intersection - result.sphere->centre).normalized();
 
 	for (auto iter = scene.lights.begin(); 
 		iter != scene.lights.end(); ++iter)
 	{
+		float lightContribution = 0.f;
+
 		switch (iter->type)
 		{
-		case LightType::Ambient:
+		case LightType::AmbientLight:
+			sceneLight += ENABLED_FEATURES >= Ambient ? iter->intensity : 0.f;
 			break;
 		case LightType::DirectionLight:
-			break;
-		case LightType::PointLight:
-			break;
+		{
+			IntersectionResult shadowIntersection;
+			const Vector3& lightDir = iter->directionN;
+			Ray shadowRay = { result.interectionPoint, lightDir };
 
-				
+			// If nothing blocking us then not in shadow
+			if (ENABLED_FEATURES >= Shadows ?
+				!DoesIntersectSphere(scene, shadowRay, shadowIntersection, EPSILON, numeric_limits<float>::max(), false) : 
+				true)
+			{
+				lightContribution = GetLighting(sphereNormal, viewVecN, lightDir, iter->intensity, result.sphere->specularExp);
+			}
+
+			break;
+		}
+		case LightType::PointLight:
+
+			IntersectionResult shadowIntersection;
+			Vector3 lightDir = (iter->position - intersection);
+			Ray shadowRay = { result.interectionPoint, lightDir };
+
+			// If nothing blocking us then not in shadow
+			if (ENABLED_FEATURES >= Shadows ?
+				!DoesIntersectSphere(scene, shadowRay, shadowIntersection, EPSILON, 1.f, false) :
+				true)
+			{
+				lightContribution = GetLighting(sphereNormal, viewVecN, lightDir.normalized(), iter->intensity, result.sphere->specularExp);
+			}
+			break;
 		}
 
-		const Vector3& lightDir = -(*iter).posOrDir;
-		float intensity = GetLighting(sphereNormal, viewVecN, lightDir, result.sphere->specularExp);
-
-		startingLight += intensity;
+		sceneLight += lightContribution;
 	}
 
-	return startingLight;
+	return sceneLight;
 }
 
 void RenderScene(const Scene& scene, TGAImage& image)
 {
 	// Useful variables
 	Vector3 zeroVec = { 0.f, 0.f, 0.f };
-	Vector3 viewportOrigin( VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, VIEWPORT_DEPTH );
-	Vector3 viewportX = { 1.f, 0.f, 0.f };
-
-	Vector3 zero(VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, VIEWPORT_DEPTH);
-	Vector3 one(1.f);
-	Vector3 defaultA;
-	defaultA.zero();
-	one = zero = Vector3(1, 2, 3);
 
 	Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, zeroVec };
 	std::pair<float, float> intersectResult;
 
 	IntersectionResult result;
-	Point2 halfCanvas = { CANVAS_WIDTH / 2.f, CANVAS_HEIGHT / 2.f };
-	for (auto x = 0; x < CANVAS_WIDTH; x++)
+	for (auto x = 0; x < CANVAS_WIDTH; ++x)
 	{
-		for (auto y = 0; y < CANVAS_HEIGHT; y++)
+		for (auto y = CANVAS_HEIGHT - 1; y >= 0; --y)
 		{
-			if ((TraceRay(scene, { x, y }, testRay, result)))
+			int invY = CANVAS_HEIGHT - y;
+			if ((TraceRay(scene, { x, invY }, testRay, result)))
 			{
-				float intensity = LightingForRaycast(scene, result, -testRay.direction.normalized());
+				float intensity = ENABLED_FEATURES > Color ? 					
+								  LightingForRaycast(scene, result, -testRay.direction.normalized()) :
+								  1.f ;
 				image.set(x, y, result.sphere->colour * intensity);
 			}
 			else
@@ -248,7 +305,7 @@ void RenderScene(const Scene& scene, TGAImage& image)
 		}
 	}
 
-	image.flip_vertically();
+	//image.flip_vertically();
 }
 
 // SDL
@@ -258,7 +315,7 @@ int done;
 float lastTime;
 
 // Extras
-const Light SUN = { Vector3(-.25f, -0.f, -1.f).normalized(), 6.75f };
+const Light SUN({ -.25f, -0.f, -1.f }, DirectionLight, 6.75f);
 
 
 void
@@ -290,10 +347,8 @@ loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* fram
 			//Get mouse position
 			int x, y;
 			SDL_GetMouseState(&x, &y);
-			x = 168;
-			y = 359;
 
-			if ((TraceRay(scene, { x, y }, testRay, result)))
+			if ((TraceRay(scene, { x, CANVAS_HEIGHT - y }, testRay, result)))
 			{
 				float intensity = LightingForRaycast(scene, result, -testRay.direction);
 				TGAColor col = result.sphere->colour * intensity;
@@ -329,30 +384,35 @@ int main(int argc, char *argv[]) {
 	Light light(Vector3());
 	cout << "size: " << sizeof(Light) << endl;
 
+	// setup scene
+	Point2 halfCanvas = { CANVAS_WIDTH / 2.f, CANVAS_HEIGHT / 2.f };
+	Vector3 viewportAdjust(VIEWPORT_WIDTH * .5f, VIEWPORT_HEIGHT * .5f, 0.f);
+
 	Scene scene;
 	scene.spheres = { 
-		{ { 0,  0, 3 }, 1, 500.f, Colors::red },
-		{ { 2,  1,  4 }, 1, 500.f, Colors::blue},
-		{ { -2, 1,  4 }, 1, 10.f, Colors::green }
+		{ Vector3({ 0, -1,  3 }) + viewportAdjust, 1, 500.f, Colors::red },
+		{ Vector3({ 2,  0,  4 }) + viewportAdjust, 1, 500.f, Colors::blue},
+		{ Vector3({ -2, 0,  4 }) + viewportAdjust, 1, 10.f, Colors::green },
+		//{ Vector3({ .5, 0,  2.5 }) + viewportAdjust, .25, 10.f, Colors::magenta },
+		{ Vector3({ 0, -5001,  0 }) + viewportAdjust, 5000, 10.f, Colors::yellow }
 	};
 	
 	Light ambient;
 	ambient.intensity = 0.2f;
-	Light point(Vector3(2, 1, 0), .6f);
-	Light directional(Vector3(1, 4, 4), .2f);
+	Light point(Vector3(2, 1, 0), PointLight, .6f);
+	Light directional(Vector3(1, 4, 4), DirectionLight, .2f);
 
 	scene.lights = {
 		ambient,
-		point,
-		directional
+		directional,
+		point
 	};
-	scene.ambient = 0.25f;
 
 	RenderScene(scene, image);
 
 	// Write to disk also
 	//image.flip_vertically(); // have the origin at the left bottom corner of the image
-	//image.write_tga_file("../results/output.tga");
+	image.write_tga_file("../results/output.tga");
 
     SDL_Surface *surface;
 
@@ -381,7 +441,7 @@ int main(int argc, char *argv[]) {
 	SDL_Texture* framebuffer = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, CANVAS_WIDTH, CANVAS_HEIGHT);
 	loop(scene, utils, &image, framebuffer, true);
 
-	bool render = false;
+	bool render = true;
 	while (!done) {
 
 		if (render)
@@ -390,8 +450,9 @@ int main(int argc, char *argv[]) {
 			//float angle = 0.f;
 
 			// rotate sun
-			scene.lights[0].posOrDir.x = cosf(angle) * SUN.posOrDir.x - sinf(angle) * SUN.posOrDir.z;
-			scene.lights[0].posOrDir.z = sinf(angle) * SUN.posOrDir.x + cosf(angle) * SUN.posOrDir.z;
+			scene.lights[0].directionN.x = cosf(angle) * SUN.directionN.x - sinf(angle) * SUN.directionN.z;
+			scene.lights[0].directionN.z = sinf(angle) * SUN.directionN.x + cosf(angle) * SUN.directionN.z;
+			scene.lights[0].directionN.normalize();
 
 			printf("SUN: (%f, %f, %f)\n", scene.lights[0]);
 		}
