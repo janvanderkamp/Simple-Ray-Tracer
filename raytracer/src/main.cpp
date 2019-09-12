@@ -111,13 +111,18 @@ struct Light
 struct IntersectionResult
 {
 	const Sphere * sphere;
+	TGAColor intersectionColor;
+
+	// TODO: store these together
 	Vector3 interectionPoint;
+	Vector3 interectionNormal;
 };
 
 struct Scene
 {
 	vector<Sphere> spheres;
 	vector<Light> lights;
+	int reflectionBounces;
 };
 
 float DistanceSquared(const Vector3& lhs, const Vector3& rhs)
@@ -193,14 +198,6 @@ bool DoesIntersectSphere(const Scene& scene, Ray& shootRay, IntersectionResult& 
 	return firstSphere != nullptr;
 }
 
-bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, IntersectionResult& result)
-{
-	Vector3 vpPos = CanvasToViewport(canvasPosition.x, canvasPosition.y);
-	shootRay.direction = (vpPos - shootRay.origin).normalized();
-
-	return DoesIntersectSphere(scene, shootRay, result, 1.f);
-}
-
 float GetDiffuse(const Vector3& normalN, const Vector3& lightN )
 {
 	float NDotL = max(normalN.dot(lightN), 0.f);
@@ -209,7 +206,9 @@ float GetDiffuse(const Vector3& normalN, const Vector3& lightN )
 
 float GetSpecular(const Vector3& normalN, const Vector3& lightN, const Vector3& viewN, float specularPower)
 {
-	Vector3 reflectingVecN = ((normalN * 2.f) * (normalN.dot(lightN)) - lightN).normalized();
+	//Vector3 reflectingVecN = ((normalN * 2.f) * (normalN.dot(lightN)) - lightN).normalized();
+	Vector3 reflectingVecN = lightN.reflect(normalN);
+
 	float RDotV = max(reflectingVecN.dot(viewN), 0.f);
 
 	return powf(RDotV, specularPower);
@@ -231,11 +230,12 @@ float GetLighting(const Vector3& normalN, const Vector3& viewVecN, const Vector3
 	return amount * intensity;
 }
 
-float LightingForRaycast(const Scene& scene, const IntersectionResult& result, const Vector3& viewVecN)
+// TODO: anything intersection related together, specular in material
+float LightingForRaycast(const Scene& scene, const Vector3& intersectionPoint, const Vector3& intersectionNormalN,  const Vector3& viewVecN, float specular)
 {
 	float sceneLight = 0.f;
-	const Vector3& intersection = result.interectionPoint;
-	Vector3 sphereNormal = (intersection - result.sphere->centre).normalized();
+	//const Vector3& intersection = result.interectionPoint;
+	//Vector3 sphereNormal = (intersection - result.sphere->centre).normalized();
 
 	for (auto iter = scene.lights.begin(); 
 		iter != scene.lights.end(); ++iter)
@@ -251,14 +251,14 @@ float LightingForRaycast(const Scene& scene, const IntersectionResult& result, c
 		{
 			IntersectionResult shadowIntersection;
 			const Vector3& lightDir = iter->directionN;
-			Ray shadowRay = { result.interectionPoint, lightDir };
+			Ray shadowRay = { intersectionPoint, lightDir };
 
 			// If nothing blocking us then not in shadow
 			if (ENABLED_FEATURES >= Shadows ?
 				!DoesIntersectSphere(scene, shadowRay, shadowIntersection, EPSILON, numeric_limits<float>::max(), false) : 
 				true)
 			{
-				lightContribution = GetLighting(sphereNormal, viewVecN, lightDir, iter->intensity, result.sphere->specularExp);
+				lightContribution = GetLighting(intersectionNormalN, viewVecN, lightDir, iter->intensity, specular);
 			}
 
 			break;
@@ -266,15 +266,15 @@ float LightingForRaycast(const Scene& scene, const IntersectionResult& result, c
 		case LightType::PointLight:
 
 			IntersectionResult shadowIntersection;
-			Vector3 lightDir = (iter->position - intersection);
-			Ray shadowRay = { result.interectionPoint, lightDir };
+			Vector3 lightDir = (iter->position - intersectionPoint);
+			Ray shadowRay = { intersectionPoint, lightDir };
 
 			// If nothing blocking us then not in shadow
 			if (ENABLED_FEATURES >= Shadows ?
 				!DoesIntersectSphere(scene, shadowRay, shadowIntersection, EPSILON, 1.f, false) :
 				true)
 			{
-				lightContribution = GetLighting(sphereNormal, viewVecN, lightDir.normalized(), iter->intensity, result.sphere->specularExp);
+				lightContribution = GetLighting(intersectionNormalN, viewVecN, lightDir.normalized(), iter->intensity, specular);
 			}
 			break;
 		}
@@ -283,6 +283,56 @@ float LightingForRaycast(const Scene& scene, const IntersectionResult& result, c
 	}
 
 	return sceneLight;
+}
+
+bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, IntersectionResult& result)
+{
+	Vector3 vpPos = CanvasToViewport(canvasPosition.x, canvasPosition.y);
+	shootRay.direction = (vpPos - shootRay.origin).normalized();
+
+	if (DoesIntersectSphere(scene, shootRay, result, 1.f))
+	{
+		Vector3 sphereNormal = (result.interectionPoint - result.sphere->centre).normalized();
+
+		float intensity = ENABLED_FEATURES > Color ?
+						/*LightingForRaycast(scene, result, -shootRay.direction.normalized()) :*/
+						LightingForRaycast(scene, result.interectionPoint, sphereNormal, -shootRay.direction.normalized(), result.sphere->specularExp) :
+						1.f;
+
+		// Now set the intersection colour
+		result.intersectionColor = result.sphere->colour * intensity;
+
+		return true;
+	}
+
+	return false;
+}
+
+bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result)
+{
+	if (DoesIntersectSphere(scene, shootRay, result, 1.f))
+	{
+		Vector3 sphereNormal = (result.interectionPoint - result.sphere->centre).normalized();
+
+		float intensity =	ENABLED_FEATURES > Color ?
+							LightingForRaycast(scene, result.interectionPoint, sphereNormal, -shootRay.direction.normalized(), result.sphere->specularExp) :
+							1.f;
+
+		IntersectionResult reflectResult;
+		shootRay.origin = result.interectionPoint;
+		shootRay.direction = -shootRay.direction.reflect(sphereNormal);
+
+		if (TraceRayRec(scene, shootRay, reflectResult))
+		{
+
+		}
+
+		result.intersectionColor = result.sphere->colour * intensity;
+
+		return true;
+	}
+
+	return false;
 }
 
 void RenderScene(const Scene& scene, TGAImage& image)
@@ -299,17 +349,30 @@ void RenderScene(const Scene& scene, TGAImage& image)
 		for (auto y = CANVAS_HEIGHT - 1; y >= 0; --y)
 		{
 			int invY = CANVAS_HEIGHT - y;
+
+			Vector3 vpPos = CanvasToViewport(x, invY);
+			//testRay.direction = (vpPos - testRay.origin).normalized();
+
 			if ((TraceRay(scene, { x, invY }, testRay, result)))
 			{
-				float intensity = ENABLED_FEATURES > Color ? 					
-								  LightingForRaycast(scene, result, -testRay.direction.normalized()) :
-								  1.f ;
-				image.set(x, y, result.sphere->colour * intensity);
+				image.set(x, y, result.intersectionColor);
 			}
 			else
 			{
 				image.set(x, y, Colors::white);
 			}
+
+			//Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, zeroVec };
+			//testRay.direction = (vpPos - testRay.origin).normalized();
+
+			//if ((TraceRayRec(scene, testRay, result)))
+			//{
+			//	image.set(x, y, result.intersectionColor);
+			//}
+			//else
+			//{
+			//	image.set(x, y, Colors::white);
+			//}
 		}
 	}
 
@@ -323,13 +386,12 @@ int done;
 float lastTime;
 
 // Extras
-const Light SUN({ -.25f, -0.f, -1.f }, DirectionLight, 6.75f);
-
+const Light SUN(Vector3(12, 1, 0), PointLight, .6f);
 
 void
-loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* framebuffer, bool render=true)
+loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* framebuffer, bool renderEachFrame=true)
 {
-	if (render)
+	if (renderEachFrame)
 	{
 		RenderScene(scene, *image);
 		float nowSeconds = utils.secondsSinceRun();
@@ -340,10 +402,10 @@ loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* fram
 
 	// debugging
 	IntersectionResult result;
-	Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, {0.f, 0.f, 0.f} };
 
 	// poll events
 	SDL_Event e;
+	bool dirty = false;
 	while (SDL_PollEvent(&e)) {
 		if (e.type == SDL_QUIT) {
 			done = 1;
@@ -356,11 +418,15 @@ loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* fram
 			int x, y;
 			SDL_GetMouseState(&x, &y);
 
-			if ((TraceRay(scene, { x, CANVAS_HEIGHT - y }, testRay, result)))
+			// TODO: Ray constructor
+			Vector3 vpPos = CanvasToViewport( x, CANVAS_HEIGHT - y );
+			Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f },  (vpPos - testRay.origin).normalized() };
+
+			if ((TraceRayRec(scene, testRay, result)))
 			{
-				float intensity = LightingForRaycast(scene, result, -testRay.direction);
-				TGAColor col = result.sphere->colour * intensity;
-				printf("intensity: %f, colour: (%d, %d, %d, %d)\n", intensity, col.bgra[0], col.bgra[1], col.bgra[2], col.bgra[3]);
+				//float intensity = LightingForRaycast(scene, result.interectionPoint, result.interectionNormal, -testRay.direction, result.sphere->specularExp);
+				TGAColor col = result.intersectionColor;
+				printf("colour: (%d, %d, %d, %d)\n", col.bgra[0], col.bgra[1], col.bgra[2], col.bgra[3]);
 			}
 		}
 		else if (e.type == SDL_KEYUP)
@@ -378,6 +444,17 @@ loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* fram
 				return;
 			default:
 				break;
+			}
+
+			if (!renderEachFrame)
+			{
+				dirty = true;
+			}
+
+			// render frame again if needed
+			if (dirty)
+			{
+				RenderScene(scene, *image);
 			}
 		}
 	}
@@ -416,16 +493,18 @@ int main(int argc, char *argv[]) {
 		//{ Vector3({ .5, 0,  2.5 }) + viewportAdjust, .25, 10.f, Colors::magenta },
 		{ Vector3({ 0, -5001,  0 }) + viewportAdjust, 5000, 10.f, Colors::yellow }
 	};
+	scene.reflectionBounces = 3;
 	
 	Light ambient;
 	ambient.intensity = 0.2f;
-	Light point(Vector3(2, 1, 0), PointLight, .6f);
+	//Light point(Vector3(2, 1, 0), PointLight, .6f);
+	Light point(SUN);
 	Light directional(Vector3(1, 4, 4), DirectionLight, .2f);
 
 	scene.lights = {
+		point,
 		ambient,
-		directional,
-		point
+		directional
 	};
 
 	RenderScene(scene, image);
@@ -461,23 +540,23 @@ int main(int argc, char *argv[]) {
 	SDL_Texture* framebuffer = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, CANVAS_WIDTH, CANVAS_HEIGHT);
 	loop(scene, utils, &image, framebuffer, true);
 
-	bool render = true;
+	bool renderEachFrame = true;
 	while (!done) {
 
-		if (render)
+		if (renderEachFrame)
 		{
 			float angle = -utils.secondsSinceRun() * 1.0f;
 			//float angle = 0.f;
 
-			// rotate sun
-			scene.lights[0].directionN.x = cosf(angle) * SUN.directionN.x - sinf(angle) * SUN.directionN.z;
-			scene.lights[0].directionN.z = sinf(angle) * SUN.directionN.x + cosf(angle) * SUN.directionN.z;
-			scene.lights[0].directionN.normalize();
+			// rotate point
+			scene.lights[0].position.x = cosf(angle) * SUN.position.x - sinf(angle) * SUN.position.z;
+			scene.lights[0].position.z = sinf(angle) * SUN.position.x + cosf(angle) * SUN.position.z;
+			scene.lights[0].position.normalize();
 
 			//printf("SUN: (%f, %f, %f)\n", scene.lights[0]);
 		}
 
-		loop(scene, utils, &image, framebuffer, render);
+		loop(scene, utils, &image, framebuffer, renderEachFrame);
 	}
 
 	return 0;

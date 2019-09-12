@@ -66,6 +66,11 @@ public:
 		x = y = z = 0.f;
 	}
 
+	Vector3 reflect(const Vector3& v) const
+	{
+		return v * 2.f * v.dot(*this) - *this;
+	}
+
 	Vector3 operator -() const
 	{
 		return Vector3(-x, -y, -z);
