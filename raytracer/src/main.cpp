@@ -44,6 +44,7 @@ struct Point2
 };
 
 const Point2 ASPECT_RATIO = { 16.f, 16.f};
+const TGAColor CLEAR_COL = Colors::white;
 const int CANVAS_WIDTH = 600;
 const int CANVAS_HEIGHT = (CANVAS_WIDTH / ASPECT_RATIO.x) * ASPECT_RATIO.y;
 const int VIEWPORT_WIDTH = 1;
@@ -308,7 +309,7 @@ bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, I
 	return false;
 }
 
-bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result)
+bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result, int numBouncesLeft = 0)
 {
 	if (DoesIntersectSphere(scene, shootRay, result, 1.f))
 	{
@@ -322,12 +323,25 @@ bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result)
 		shootRay.origin = result.interectionPoint;
 		shootRay.direction = -shootRay.direction.reflect(sphereNormal);
 
-		//if (TraceRayRec(scene, shootRay, reflectResult))
+		TGAColor intersectionColourCurr = result.sphere->colour * intensity;
+
+		if (numBouncesLeft > 0)
 		{
+			float lerpFactor = 0.5f;
+			TGAColor intersectionColourNext = CLEAR_COL;
+			if (TraceRayRec(scene, shootRay, reflectResult, numBouncesLeft - 1))
+			{
+				intersectionColourNext = reflectResult.sphere->colour * intensity;
+			}
 
+			TGAColor mixed;
+			TGAColor::lerp(intersectionColourCurr, intersectionColourNext, 0.5f, &mixed);
+			result.intersectionColor = mixed;
 		}
-
-		result.intersectionColor = result.sphere->colour * intensity;
+		else
+		{
+			result.intersectionColor = intersectionColourCurr;
+		}
 
 		return true;
 	}
