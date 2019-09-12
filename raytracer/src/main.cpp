@@ -322,7 +322,7 @@ bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result)
 		shootRay.origin = result.interectionPoint;
 		shootRay.direction = -shootRay.direction.reflect(sphereNormal);
 
-		if (TraceRayRec(scene, shootRay, reflectResult))
+		//if (TraceRayRec(scene, shootRay, reflectResult))
 		{
 
 		}
@@ -353,19 +353,7 @@ void RenderScene(const Scene& scene, TGAImage& image)
 			Vector3 vpPos = CanvasToViewport(x, invY);
 			//testRay.direction = (vpPos - testRay.origin).normalized();
 
-			if ((TraceRay(scene, { x, invY }, testRay, result)))
-			{
-				image.set(x, y, result.intersectionColor);
-			}
-			else
-			{
-				image.set(x, y, Colors::white);
-			}
-
-			//Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, zeroVec };
-			//testRay.direction = (vpPos - testRay.origin).normalized();
-
-			//if ((TraceRayRec(scene, testRay, result)))
+			//if ((TraceRay(scene, { x, invY }, testRay, result)))
 			//{
 			//	image.set(x, y, result.intersectionColor);
 			//}
@@ -373,6 +361,18 @@ void RenderScene(const Scene& scene, TGAImage& image)
 			//{
 			//	image.set(x, y, Colors::white);
 			//}
+
+			Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, zeroVec };
+			testRay.direction = (vpPos - testRay.origin).normalized();
+
+			if ((TraceRayRec(scene, testRay, result)))
+			{
+				image.set(x, y, result.intersectionColor);
+			}
+			else
+			{
+				image.set(x, y, Colors::white);
+			}
 		}
 	}
 
