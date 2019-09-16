@@ -208,7 +208,7 @@ float GetDiffuse(const Vector3& normalN, const Vector3& lightN )
 float GetSpecular(const Vector3& normalN, const Vector3& lightN, const Vector3& viewN, float specularPower)
 {
 	//Vector3 reflectingVecN = ((normalN * 2.f) * (normalN.dot(lightN)) - lightN).normalized();
-	Vector3 reflectingVecN = lightN.reflect(normalN);
+	Vector3 reflectingVecN = (-lightN).reflect(normalN);
 
 	float RDotV = max(reflectingVecN.dot(viewN), 0.f);
 
@@ -309,9 +309,9 @@ bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, I
 	return false;
 }
 
-bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result, int numBouncesLeft = 0)
+bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result, int numBouncesLeft = 0, float minT = 1.f)
 {
-	if (DoesIntersectSphere(scene, shootRay, result, 1.f))
+	if (DoesIntersectSphere(scene, shootRay, result, minT))
 	{
 		Vector3 sphereNormal = (result.interectionPoint - result.sphere->centre).normalized();
 
@@ -321,7 +321,7 @@ bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result, 
 
 		IntersectionResult reflectResult;
 		shootRay.origin = result.interectionPoint;
-		shootRay.direction = -shootRay.direction.reflect(sphereNormal);
+		shootRay.direction = shootRay.direction.reflect(sphereNormal);
 
 		TGAColor intersectionColourCurr = result.sphere->colour * intensity;
 
@@ -329,7 +329,7 @@ bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result, 
 		{
 			float lerpFactor = 0.5f;
 			TGAColor intersectionColourNext = CLEAR_COL;
-			if (TraceRayRec(scene, shootRay, reflectResult, numBouncesLeft - 1))
+			if (TraceRayRec(scene, shootRay, reflectResult, numBouncesLeft - 1, EPSILON))
 			{
 				intersectionColourNext = reflectResult.sphere->colour * intensity;
 			}
@@ -379,7 +379,7 @@ void RenderScene(const Scene& scene, TGAImage& image)
 			Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, zeroVec };
 			testRay.direction = (vpPos - testRay.origin).normalized();
 
-			if ((TraceRayRec(scene, testRay, result)))
+			if ((TraceRayRec(scene, testRay, result, 0)))
 			{
 				image.set(x, y, result.intersectionColor);
 			}
@@ -436,7 +436,7 @@ loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* fram
 			Vector3 vpPos = CanvasToViewport( x, CANVAS_HEIGHT - y );
 			Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f },  (vpPos - testRay.origin).normalized() };
 
-			if ((TraceRayRec(scene, testRay, result)))
+			if ((TraceRayRec(scene, testRay, result, 1)))
 			{
 				//float intensity = LightingForRaycast(scene, result.interectionPoint, result.interectionNormal, -testRay.direction, result.sphere->specularExp);
 				TGAColor col = result.intersectionColor;
@@ -554,7 +554,7 @@ int main(int argc, char *argv[]) {
 	SDL_Texture* framebuffer = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, CANVAS_WIDTH, CANVAS_HEIGHT);
 	loop(scene, utils, &image, framebuffer, true);
 
-	bool renderEachFrame = true;
+	bool renderEachFrame = false;
 	while (!done) {
 
 		if (renderEachFrame)

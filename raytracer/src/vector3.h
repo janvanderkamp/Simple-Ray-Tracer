@@ -39,7 +39,7 @@ public:
 	// Geometric
 	void normalize()
 	{
-		float magSqrd = x * x + y * y + z * z;
+		float magSqrd = magnitudeSquared();
 		if (magSqrd > 0.0f)
 		{
 			float oneOverMag = 1.f / sqrt(magSqrd);
@@ -60,15 +60,32 @@ public:
 		return x * v.x + y * v.y + z * v.z;
 	}
 
+	inline float magnitudeSquared()
+	{
+		return x * x + y * y + z * z;
+	}
+
+	inline float magnitude()
+	{
+		return sqrtf(magnitudeSquared());
+	}
+
 	// Math
 	void zero() 
 	{
 		x = y = z = 0.f;
 	}
 
+	// Note: *this is pointing away from angle of incidence
+	//Vector3 reflect(const Vector3& v) const
+	//{
+	//	return v * 2.f * v.dot(*this) - *this;
+	//}
+
+	// Note: *this is pointing towards angle of incidence
 	Vector3 reflect(const Vector3& v) const
 	{
-		return v * 2.f * v.dot(*this) - *this;
+		return *this - (v * 2.f * v.dot(*this));
 	}
 
 	Vector3 operator -() const
