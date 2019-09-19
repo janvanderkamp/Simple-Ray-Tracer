@@ -45,7 +45,7 @@ struct Point2
 };
 
 const Point2 ASPECT_RATIO = { 16.f, 16.f};
-const TGAColor CLEAR_COL = Colors::black;
+const TGAColor CLEAR_COL = Colors::skyBlue;
 const int CANVAS_WIDTH = 720;
 const int CANVAS_HEIGHT = (CANVAS_WIDTH / ASPECT_RATIO.x) * ASPECT_RATIO.y;
 const int VIEWPORT_WIDTH = 1;
@@ -53,16 +53,58 @@ const int VIEWPORT_HEIGHT = 1;
 const int VIEWPORT_DEPTH = 1;
 const float EPSILON = .0001f;
 
+// TODO: these all in world space for sphere texturing
+const Vector3 UP(0.f, 1.f, 0.f);
+const Vector3 FORWARD(0.f, 0.f, -1.f);
+
 Features ENABLED_FEATURES = Reflection;
 //Utils utils;
 
-struct Sphere
+class Sphere
 {
+public:
+	Sphere(const Vector3& centre, float radius, float specularExp, float reflective, TGAColor color, bool textureDetails = false) :
+		centre(centre),
+		radius(radius),
+		specularExp(specularExp),
+		reflective(reflective),
+		color(color),
+		textureDetails(textureDetails)
+	{}
+
 	Vector3 centre;
 	float radius;
 	float specularExp;
 	float reflective;
-	TGAColor colour;
+	bool textureDetails;
+
+	TGAColor getColorAtPoint(const Vector3& point) const
+	{
+		if (textureDetails)
+		{
+			float texScale = radius * 4.f;
+			Vector3 cToP = (point - centre).normalized();
+			float pH = FORWARD.dot(cToP);
+			float pV = UP.dot(cToP);
+			if (cToP.y < UP.y)
+			{
+				pV *= -1.f;
+			}
+
+			int uv1 = static_cast<int>((pH * texScale));
+			int uv2 = static_cast<int>((pV * texScale));
+
+			bool setCol = uv2 % 2 == 0 ? uv1 % 2 != 0 : uv1 % 2 == 0;
+
+			TGAColor texcol = uv1 % 2 != 0 ? Colors::white : Colors::black ;
+			return texcol;
+		}
+
+		return color;
+	}
+
+private:
+	TGAColor color;
 };
 
 struct Ray
@@ -117,7 +159,7 @@ struct IntersectionResult
 	TGAColor intersectionColor;
 
 	// TODO: store these together
-	Vector3 interectionPoint;
+	Vector3 intersectionPoint;
 	Vector3 interectionNormal;
 };
 
@@ -196,7 +238,7 @@ bool DoesIntersectSphere(const Scene& scene, Ray& shootRay, IntersectionResult& 
 	}
 
 	result.sphere = firstSphere;
-	result.interectionPoint = shootRay.origin + shootRay.direction * t;
+	result.intersectionPoint = shootRay.origin + shootRay.direction * t;
 
 	return firstSphere != nullptr;
 }
@@ -295,15 +337,15 @@ bool TraceRay(const Scene& scene, const Point2& canvasPosition, Ray& shootRay, I
 
 	if (DoesIntersectSphere(scene, shootRay, result, 1.f))
 	{
-		Vector3 sphereNormal = (result.interectionPoint - result.sphere->centre).normalized();
+		Vector3 sphereNormal = (result.intersectionPoint - result.sphere->centre).normalized();
 
 		float intensity = ENABLED_FEATURES > Color ?
 						/*LightingForRaycast(scene, result, -shootRay.direction.normalized()) :*/
-						LightingForRaycast(scene, result.interectionPoint, sphereNormal, -shootRay.direction.normalized(), result.sphere->specularExp) :
+						LightingForRaycast(scene, result.intersectionPoint, sphereNormal, -shootRay.direction.normalized(), result.sphere->specularExp) :
 						1.f;
 
 		// Now set the intersection colour
-		result.intersectionColor = result.sphere->colour * intensity;
+		result.intersectionColor = result.sphere->getColorAtPoint(result.intersectionPoint) * intensity;
 
 		return true;
 	}
@@ -315,25 +357,25 @@ bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result, 
 {
 	if (DoesIntersectSphere(scene, shootRay, result, minT))
 	{
-		Vector3 sphereNormal = (result.interectionPoint - result.sphere->centre).normalized();
+		Vector3 sphereNormal = (result.intersectionPoint - result.sphere->centre).normalized();
 
 		float intensity =	ENABLED_FEATURES > Color ?
-							LightingForRaycast(scene, result.interectionPoint, sphereNormal, -shootRay.direction.normalized(), result.sphere->specularExp) :
+							LightingForRaycast(scene, result.intersectionPoint, sphereNormal, -shootRay.direction.normalized(), result.sphere->specularExp) :
 							1.f;
 
 
-		TGAColor intersectionColourCurr = result.sphere->colour * intensity;
+		TGAColor intersectionColourCurr = result.sphere->getColorAtPoint(result.intersectionPoint) * intensity;
 		if (numBouncesLeft > 0)
 		{
 			IntersectionResult reflectResult;
-			shootRay.origin = result.interectionPoint;
+			shootRay.origin = result.intersectionPoint;
 			shootRay.direction = shootRay.direction.reflect(sphereNormal);
 
 			TGAColor intersectionColourNext = CLEAR_COL;
 			float lerpFactor = result.sphere->reflective;
 			if ((lerpFactor > EPSILON) && TraceRayRec(scene, shootRay, reflectResult, numBouncesLeft - 1, EPSILON))
 			{
-				intersectionColourNext = reflectResult.sphere->colour * intensity;
+				intersectionColourNext = reflectResult.sphere->getColorAtPoint(result.intersectionPoint) * intensity;
 			}
 
 			TGAColor mixed;
@@ -441,8 +483,9 @@ loop(const Scene& scene, const Utils& utils, TGAImage * image, SDL_Texture* fram
 			if ((TraceRayRec(scene, testRay, result, 1)))
 			{
 				//float intensity = LightingForRaycast(scene, result.interectionPoint, result.interectionNormal, -testRay.direction, result.sphere->specularExp);
+
 				TGAColor col = result.intersectionColor;
-				printf("colour: (%d, %d, %d, %d)\n", col.bgra[0], col.bgra[1], col.bgra[2], col.bgra[3]);
+				printf("colour: (%d, %d, %d, %d)   pH,pV: (%f, %f)\n", col.bgra[0], col.bgra[1], col.bgra[2], col.bgra[3]);
 			}
 		}
 		else if (e.type == SDL_KEYUP)
@@ -501,13 +544,19 @@ int main(int argc, char *argv[]) {
 	Point2 halfCanvas = { CANVAS_WIDTH / 2.f, CANVAS_HEIGHT / 2.f };
 	Vector3 viewportAdjust(VIEWPORT_WIDTH * .5f, VIEWPORT_HEIGHT * .5f, 0.f);
 
+	//TextureDetails checkerBoard = {
+	//	{ Colors.white, Colors.black },
+	//};
+
+
 	Scene scene;
 	scene.spheres = { 
-		{ Vector3({ 0, -1,  3 }) + viewportAdjust, 1, 500.f, 0.2f, Colors::red },
-		{ Vector3({ 2,  0,  4 }) + viewportAdjust, 1, 500.f, 0.3f, Colors::blue},
-		{ Vector3({ -2, 0,  4 }) + viewportAdjust, 1, 10.f, 0.4f, Colors::green },
+		//{ Vector3({ 0, -1,  3 }) + viewportAdjust, 1, 500.f, 0.2f, Colors::red },
+		//{ Vector3({ 2,  0,  4 }) + viewportAdjust, 1, 500.f, 0.3f, Colors::blue},
+		//{ Vector3({ -2, 0,  4 }) + viewportAdjust, 1, 10.f, 0.4f, Colors::green },
 		//{ Vector3({ .5, 0,  2.5 }) + viewportAdjust, .25, 10.f, Colors::magenta },
-		{ Vector3({ 0, -5001,  0 }) + viewportAdjust, 5000, 1000.f, 0.5f, Colors::yellow }
+		Sphere(Vector3({ 0, 0.1,  3 }) + viewportAdjust, 0.25f, 500.f, 0.8f, Colors::white),
+		Sphere(Vector3({ 0, -1001,  0 }) + viewportAdjust, 1000, 1000.f, 0.25f, Colors::yellow, true)
 	};
 	scene.reflectionBounces = 3;
 	
