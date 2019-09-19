@@ -28,6 +28,7 @@ enum Features
 	Shadows,
 	Reflection
 };
+
 Features& operator++(Features& f)
 {
 	return f = (f == Features::Reflection) ? Features::Color : static_cast<Features>(static_cast<int>(f) + 1);
@@ -44,15 +45,15 @@ struct Point2
 };
 
 const Point2 ASPECT_RATIO = { 16.f, 16.f};
-const TGAColor CLEAR_COL = Colors::white;
-const int CANVAS_WIDTH = 600;
+const TGAColor CLEAR_COL = Colors::black;
+const int CANVAS_WIDTH = 720;
 const int CANVAS_HEIGHT = (CANVAS_WIDTH / ASPECT_RATIO.x) * ASPECT_RATIO.y;
 const int VIEWPORT_WIDTH = 1;
 const int VIEWPORT_HEIGHT = 1;
 const int VIEWPORT_DEPTH = 1;
 const float EPSILON = .0001f;
 
-Features ENABLED_FEATURES = Color;
+Features ENABLED_FEATURES = Reflection;
 //Utils utils;
 
 struct Sphere
@@ -60,6 +61,7 @@ struct Sphere
 	Vector3 centre;
 	float radius;
 	float specularExp;
+	float reflective;
 	TGAColor colour;
 };
 
@@ -319,23 +321,23 @@ bool TraceRayRec(const Scene& scene, Ray& shootRay, IntersectionResult& result, 
 							LightingForRaycast(scene, result.interectionPoint, sphereNormal, -shootRay.direction.normalized(), result.sphere->specularExp) :
 							1.f;
 
-		IntersectionResult reflectResult;
-		shootRay.origin = result.interectionPoint;
-		shootRay.direction = shootRay.direction.reflect(sphereNormal);
 
 		TGAColor intersectionColourCurr = result.sphere->colour * intensity;
-
 		if (numBouncesLeft > 0)
 		{
-			float lerpFactor = 0.5f;
+			IntersectionResult reflectResult;
+			shootRay.origin = result.interectionPoint;
+			shootRay.direction = shootRay.direction.reflect(sphereNormal);
+
 			TGAColor intersectionColourNext = CLEAR_COL;
-			if (TraceRayRec(scene, shootRay, reflectResult, numBouncesLeft - 1, EPSILON))
+			float lerpFactor = result.sphere->reflective;
+			if ((lerpFactor > EPSILON) && TraceRayRec(scene, shootRay, reflectResult, numBouncesLeft - 1, EPSILON))
 			{
 				intersectionColourNext = reflectResult.sphere->colour * intensity;
 			}
 
 			TGAColor mixed;
-			TGAColor::lerp(intersectionColourCurr, intersectionColourNext, 0.5f, &mixed);
+			TGAColor::lerp(intersectionColourNext, intersectionColourCurr, lerpFactor, &mixed);
 			result.intersectionColor = mixed;
 		}
 		else
@@ -379,13 +381,13 @@ void RenderScene(const Scene& scene, TGAImage& image)
 			Ray testRay = { { VIEWPORT_WIDTH / 2.f, VIEWPORT_HEIGHT / 2.f, 0.f }, zeroVec };
 			testRay.direction = (vpPos - testRay.origin).normalized();
 
-			if ((TraceRayRec(scene, testRay, result, 0)))
+			if ((TraceRayRec(scene, testRay, result, ENABLED_FEATURES >= Reflection ? 2 : 0 )))
 			{
 				image.set(x, y, result.intersectionColor);
 			}
 			else
 			{
-				image.set(x, y, Colors::white);
+				image.set(x, y, CLEAR_COL);
 			}
 		}
 	}
@@ -501,11 +503,11 @@ int main(int argc, char *argv[]) {
 
 	Scene scene;
 	scene.spheres = { 
-		{ Vector3({ 0, -1,  3 }) + viewportAdjust, 1, 500.f, Colors::red },
-		{ Vector3({ 2,  0,  4 }) + viewportAdjust, 1, 500.f, Colors::blue},
-		{ Vector3({ -2, 0,  4 }) + viewportAdjust, 1, 10.f, Colors::green },
+		{ Vector3({ 0, -1,  3 }) + viewportAdjust, 1, 500.f, 0.2f, Colors::red },
+		{ Vector3({ 2,  0,  4 }) + viewportAdjust, 1, 500.f, 0.3f, Colors::blue},
+		{ Vector3({ -2, 0,  4 }) + viewportAdjust, 1, 10.f, 0.4f, Colors::green },
 		//{ Vector3({ .5, 0,  2.5 }) + viewportAdjust, .25, 10.f, Colors::magenta },
-		{ Vector3({ 0, -5001,  0 }) + viewportAdjust, 5000, 10.f, Colors::yellow }
+		{ Vector3({ 0, -5001,  0 }) + viewportAdjust, 5000, 1000.f, 0.5f, Colors::yellow }
 	};
 	scene.reflectionBounces = 3;
 	
@@ -525,7 +527,6 @@ int main(int argc, char *argv[]) {
 
 	// Write to disk also
 	//image.flip_vertically(); // have the origin at the left bottom corner of the image
-	image.write_tga_file("../results/output.tga");
 
     SDL_Surface *surface;
 
@@ -555,6 +556,11 @@ int main(int argc, char *argv[]) {
 	loop(scene, utils, &image, framebuffer, true);
 
 	bool renderEachFrame = false;
+	if (!renderEachFrame)
+	{
+		image.write_tga_file("../results/output.tga");
+	}
+
 	while (!done) {
 
 		if (renderEachFrame)
