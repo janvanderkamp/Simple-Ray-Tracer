@@ -2,6 +2,7 @@
 #define __IMAGE_H__
 
 #include <fstream>
+#include <vector>
 
 #pragma pack(push,1)
 struct TGA_Header {
@@ -50,7 +51,8 @@ struct TGAColor {
 		}
 	}
 
-	unsigned char& operator[](const int i) { return bgra[i]; }
+	const unsigned char& operator[](const int i) const { return bgra[i]; }
+	unsigned char& operator[](const int i)  { return bgra[i]; }
 
 	TGAColor operator *(float intensity) const {
 		TGAColor res = *this;
@@ -58,6 +60,14 @@ struct TGAColor {
 		for (int i = 0; i < 4; i++) res.bgra[i] = bgra[i] * intensity;
 		return res;
 	}
+
+	// TODO: not working??!!
+	//TGAColor combine(const TGAColor& c)
+	//{
+	//	TGAColor res = *this;
+	//	for (int i = 0; i < 4; i++) res.bgra[i] *= c[i];
+	//	return res;
+	//}
 
 	static void lerp(const TGAColor& lhs, const TGAColor& rhs, float lerpValue, TGAColor * resultOut) {
 
@@ -69,7 +79,8 @@ struct TGAColor {
 namespace Colors
 {
 	const TGAColor black = TGAColor(0, 0, 0, 255);
-	const TGAColor blue = TGAColor(0, 0, 0, 255);
+	const TGAColor blue = TGAColor(0, 0, 255, 255);
+	const TGAColor skyBlue = TGAColor(135, 206, 235, 255);
 	const TGAColor clear = TGAColor(0, 0, 0, 0);
 	const TGAColor cyan = TGAColor(0, 255, 255, 255);
 	const TGAColor gray = TGAColor(122, 122, 122, 255);

@@ -72,9 +72,10 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>C:\Users\Jan\Development\libs\SDL2-2.0.9\include;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Users\Jan\Development\libs\SDL2-2.0.9\lib\x64;$(LibraryPath)</LibraryPath>
+    <ExecutablePath>C:\Users\Jan\Development\gfx\raytracer\raytracer\src;$(ExecutablePath)</ExecutablePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>C:\Users\Jan\Development\libs\SDL2-2.0.9\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\Jan\Development\gfx\raytracer\raytracer\src;C:\Users\Jan\Development\libs\SDL2-2.0.9\include;$(IncludePath)</IncludePath>
     <LibraryPath>C:\Users\Jan\Development\libs\SDL2-2.0.9\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -120,6 +121,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -134,13 +136,14 @@
     <ClCompile Include="src\tgaimage.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="src\SDL2.dll" />
+  </ItemGroup>
+  <ItemGroup>
     <ClInclude Include="src\raytracer.h" />
+    <ClInclude Include="src\realtime.h" />
     <ClInclude Include="src\tgaimage.h" />
     <ClInclude Include="src\utils.h" />
     <ClInclude Include="src\vector3.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="src\SDL2.dll" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
