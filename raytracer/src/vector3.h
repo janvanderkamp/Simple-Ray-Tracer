@@ -1,5 +1,4 @@
-#ifndef VECTOR3
-#define VECTOR3
+#pragma once
 
 /////////////////////////////////////////////////////////////////
 //
@@ -71,10 +70,17 @@ public:
 	}
 
 	// Math
-	void zero() 
+	inline Vector3 & reset()
 	{
 		x = y = z = 0.f;
+		return *this;
 	}
+
+	static inline Vector3 zero()
+	{
+		return Vector3().reset();
+	}
+
 
 	// Note: *this is pointing away from angle of incidence
 	//Vector3 reflect(const Vector3& v) const
@@ -83,56 +89,56 @@ public:
 	//}
 
 	// Note: *this is pointing towards angle of incidence
-	Vector3 reflect(const Vector3& v) const
+	inline Vector3 reflect(const Vector3& v) const
 	{
 		return *this - (v * 2.f * v.dot(*this));
 	}
 
-	Vector3 operator -() const
+	inline Vector3 operator -() const
 	{
 		return Vector3(-x, -y, -z);
 	}
 
-	Vector3 operator +(const Vector3& v) const
+	inline Vector3 operator +(const Vector3& v) const
 	{
 		return Vector3(v.x + x, v.y + y, v.z + z);
 	}
 
-	Vector3 operator -(const Vector3& v) const
+	inline Vector3 operator -(const Vector3& v) const
 	{
 		return Vector3(x - v.x, y - v.y, z - v.z);
 	}
 
-	Vector3 operator *(float s) const
+	inline Vector3 operator *(float s) const
 	{
 		return Vector3(x * s, y * s, z * s);
 	}
 
-	Vector3 operator /(float d) const
+	inline Vector3 operator /(float d) const
 	{	
 		float oneOver = 1.f / d;
 		return Vector3(x * oneOver, y * oneOver, z * oneOver);
 	}
 
-	Vector3 &operator +=(const Vector3& v)
+	inline Vector3 &operator +=(const Vector3& v)
 	{
 		x += v.x; y += v.y; z += v.z;
 		return *this;
 	}
 
-	Vector3 &operator -=(const Vector3& v)
+	inline Vector3 &operator -=(const Vector3& v)
 	{
 		x -= v.x; y -= v.y; z -= v.z;
 		return *this;
 	}
 
-	Vector3 &operator *=(float s)
+	inline Vector3 &operator *=(float s)
 	{
 		x *= s; y *= s; z *= s;
 		return *this;
 	}
 
-	Vector3 &operator /=(float d)
+	inline Vector3 &operator /=(float d)
 	{
 		float oneOver = 1.f / d;
 		x *= oneOver; y *= oneOver; z *= oneOver;
@@ -142,4 +148,12 @@ public:
 	~Vector3() {}
 };
 
-#endif
+inline Vector3 operator *(float t, const Vector3& rhs)
+{
+	return Vector3(t * rhs.x, t * rhs.y, t * rhs.z);
+}
+
+inline Vector3 operator /(float t, const Vector3& rhs)
+{
+	return Vector3(t / rhs.x, t / rhs.y, t / rhs.z);
+}
