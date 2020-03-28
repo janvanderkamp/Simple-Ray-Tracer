@@ -15,7 +15,7 @@ SDL_Window* window;
 SDL_Renderer* renderer;
 int done = 1;
 float lastTime;
-std::string label("aa");
+std::string label("diffuse-gamma");
 
 struct Config
 {
@@ -45,10 +45,10 @@ Vector3 randomInUnitSphere()
 Vector3 color(const Ray& r, const Surface* world) {
 
 	hit_record rec;
-	if (world->hit(r, 0.0, std::numeric_limits < float >::max(), rec))
+	if (world->hit(r, 0.001, std::numeric_limits < float >::max(), rec))
 	{
-		const Vector3& n = rec.normal.normalized();
-		return 0.5 * Vector3(n.x + 1, n.y + 1, n.z + 1);
+		Vector3 target = rec.p + rec.normal + randomInUnitSphere();
+		return 0.5 * color(Ray(rec.p, target - rec.p), world);
 	}
 	else
 	{
@@ -76,6 +76,10 @@ void RenderWorld(const Surface& world, const Config& c, TGAImage& image)
 				cV += color(r, &world);
 			}
 			cV /= c.ns;
+
+			// To a first approximation, we can use “gamma 2” which means raising the color to the power
+			// 1 / gamma, or in our simple case ½, which is just square - root:
+			cV = Vector3(sqrtf(cV.x), sqrtf(cV.y), sqrtf(cV.z));
 
 			int ir = int(255.99f * cV.x);
 			int ig = int(255.99f * cV.y);
@@ -182,8 +186,8 @@ renderLoop(const Surface& world, const Config& config, TGAImage* image, SDL_Text
 
 int main(int argc, char* argv[]) {
 
-	int nx = 1000;
-	int ny = 500;
+	int nx = 1500;
+	int ny = 750;
 	int ns = 100;
 	srand(time(NULL));
 
