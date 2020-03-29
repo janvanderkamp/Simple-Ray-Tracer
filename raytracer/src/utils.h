@@ -6,11 +6,32 @@
 using namespace std;
 using namespace chrono;
 
-class Utils
+namespace Utils
+{
+	float rand_n()
+	{
+		return (float(rand()) / float(RAND_MAX));
+	}
+
+	Vector3 randomInUnitSphere()
+	{
+		Vector3 p;
+		do
+		{
+			p = 2.f * Vector3(rand_n(), rand_n(), rand_n()) - Vector3(1.f);
+		} while (p.magnitudeSquared() >= 1.0);
+
+		return p;
+	}
+
+};
+
+
+class TimeUtils
 {
 public:
 
-	Utils()
+	TimeUtils()
 	{
 		_startTime = std::chrono::high_resolution_clock::now();
 	}

@@ -6,9 +6,17 @@
 class Sphere : public Surface {
 public:
 	Sphere() {}
-	Sphere(Vector3 cen, float r) : center(cen), radius(r) {};
+	Sphere(Vector3 cen, float r, Material * mat) : center(cen), radius(r), material(mat) {};
 
 	virtual bool hit(const Ray& r, float tMin, float tMax, hit_record&rec) const;
+
+	virtual ~Sphere()
+	{
+		if (material != NULL)
+		{
+			delete(material);
+		}
+	}
 
 public:
 
@@ -17,10 +25,12 @@ public:
 		h.t = tVal;
 		h.p = r.pointAtParameter(h.t);
 		h.normal = ((h.p - center) / radius);
+		h.mat = material;
 	}
 
 	Vector3 center;
 	float radius;
+	Material * material;
 };
 
 bool Sphere::hit(const Ray& r, float tMin, float tMax, hit_record&rec) const

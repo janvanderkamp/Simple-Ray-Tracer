@@ -48,10 +48,15 @@ public:
 		}
 	}
 
-	Vector3 & normalized()
+	Vector3& normalized()
 	{
 		normalize();
 		return *this;
+	}
+
+	Vector3 normalized() const
+	{
+		return Vector3(*this).normalized();
 	}
 
 	float dot(const Vector3& v) const
@@ -112,6 +117,11 @@ public:
 	inline Vector3 operator *(float s) const
 	{
 		return Vector3(x * s, y * s, z * s);
+	}
+
+	inline Vector3 operator *(const Vector3& v) const
+	{
+		return Vector3(v.x * this->x, v.y * this->y, v.z * this->z);
 	}
 
 	inline Vector3 operator /(float d) const

@@ -5,6 +5,8 @@
 #include "surface.h"
 #include "surface_group.h"
 #include "sphere.h"
+#include "utils.h"
+#include "material.h"
 #include <iostream>
 #include <fstream>
 #include <stdlib.h>
@@ -15,7 +17,7 @@ SDL_Window* window;
 SDL_Renderer* renderer;
 int done = 1;
 float lastTime;
-std::string label("diffuse-gamma");
+std::string label("metals");
 
 struct Config
 {
@@ -26,29 +28,22 @@ struct Config
 	Vector3 origin;
 };
 
-float rand_n()
-{
-	return (float(rand()) / float(RAND_MAX));
-}
-
-Vector3 randomInUnitSphere()
-{
-	Vector3 p;
-	do
-	{
-		p = 2.f * Vector3(rand_n(), rand_n(), rand_n()) - Vector3(1.f);
-	} while (p.magnitudeSquared() >= 1.0);
-
-	return p;
-}
-
-Vector3 color(const Ray& r, const Surface* world) {
+Vector3 color(const Ray& r, const Surface* world, int depth) {
 
 	hit_record rec;
 	if (world->hit(r, 0.001, std::numeric_limits < float >::max(), rec))
 	{
-		Vector3 target = rec.p + rec.normal + randomInUnitSphere();
-		return 0.5 * color(Ray(rec.p, target - rec.p), world);
+		Ray scattered;
+		Vector3 attenuation;
+		
+		if (depth < 50 && rec.mat->scatter(r, rec, attenuation, scattered))
+		{
+			return attenuation * color(scattered, world, depth + 1);
+		}
+		else
+		{
+			return Vector3(0.f);
+		}
 	}
 	else
 	{
@@ -69,11 +64,11 @@ void RenderWorld(const Surface& world, const Config& c, TGAImage& image)
 			Vector3 cV(0.f);
 			for (int s = 0; s < c.ns; s++)
 			{
-				float u = (float(i) + rand_n()) / float(c.nx);
-				float v = (float(j) + rand_n()) / float(c.ny);
+				float u = (float(i) + Utils::rand_n()) / float(c.nx);
+				float v = (float(j) + Utils::rand_n()) / float(c.ny);
 
 				Ray r(c.origin, c.lowerLeft + u * c.horizontal + v * c.vertical);
-				cV += color(r, &world);
+				cV += color(r, &world, 0);
 			}
 			cV /= c.ns;
 
@@ -132,7 +127,7 @@ renderLoop(const Surface& world, const Config& config, TGAImage* image, SDL_Text
 			float u = float(x) / float(config.nx);
 			float v = float(y) / float(config.ny);
 			Ray r(config.origin, config.lowerLeft + u * config.horizontal + v * config.vertical);
-			Vector3 cV = color(r, &world);
+			Vector3 cV = color(r, &world, 0);
 
 			printf("colour: (%f, %f, %f)\n", cV.x, cV.y, cV.z, cV);
 
@@ -202,10 +197,13 @@ int main(int argc, char* argv[]) {
 
 	Ray r = Ray(Vector3::zero(), Vector3::zero());
 
-	Surface* list[2];
-	list[0] = new Sphere(Vector3(0, 0, -1), 0.5);
-	list[1] = new Sphere(Vector3(0, -100.5, -1), 100);
-	Surface* world = new SurfaceGroup(list, 2);
+	const int numSpheres = 4;
+	Surface* surfaces[numSpheres];
+	surfaces[0] = new Sphere(Vector3(0, 0, -1), 0.5, new Lambertian(Vector3(.8f, .8f, .3f)));
+	surfaces[1] = new Sphere(Vector3(0, -100.5, -1), 100, new Lambertian(Vector3(.8f, .8f, 0.f)));
+	surfaces[2] = new Sphere(Vector3(1, 0, -1), 0.5, new Metal(Vector3(.8f, .6f, .2f)));
+	surfaces[3] = new Sphere(Vector3(-1, 0, -1), 0.5, new Metal(Vector3(.8f, .8f, .8f)));
+	Surface* world = new SurfaceGroup(surfaces, numSpheres);
 
 	// ==================================
 	// Setup SDL

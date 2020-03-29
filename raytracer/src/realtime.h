@@ -176,11 +176,11 @@ struct Scene
 	vector<Sphere> spheres;
 	vector<Light> lights;
 	int reflectionBounces;
-	Utils utils;
+	TimeUtils utils;
 };
 
 
-bool RaySphereIntersection(const Utils& utils, const Ray& ray, const Sphere& sphere, std::pair<float, float>& resultOut)
+bool RaySphereIntersection(const TimeUtils& utils, const Ray& ray, const Sphere& sphere, std::pair<float, float>& resultOut)
 {
 	Vector3 OC = (ray.origin - sphere.centre);
 	Vector3 D = (ray.direction);
