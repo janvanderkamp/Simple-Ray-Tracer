@@ -1,4 +1,5 @@
-﻿#include <vector>
+﻿#define SDL_MAIN_HANDLED
+#include <vector>
 #include "SDL.h"
 #include "tgaimage.h"
 #include "ray.h"
@@ -179,11 +180,11 @@ renderLoop(const Surface& world, const Config& config, TGAImage* image, SDL_Text
 
 
 
-int main(int argc, char* argv[]) {
+int SDL_main(int argc, char* argv[]) {
 
-	int nx = 1500;
-	int ny = 750;
-	int ns = 100;
+	int nx = 500;
+	int ny = 250;
+	int ns = 10;
 	srand(time(NULL));
 
 	TGAImage image(nx, ny, TGAImage::RGBA);

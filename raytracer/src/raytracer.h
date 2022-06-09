@@ -3,6 +3,9 @@
 
 #pragma once
 
+#define SDL_MAIN_HANDLED
+#include <vector>
+#include "SDL.h"
 #include <iostream>
 
 // TODO: Reference additional headers your program requires here.
